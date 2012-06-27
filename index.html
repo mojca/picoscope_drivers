@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="Picoscope drivers : An initial attempt to reverse-engineer drivers for Picoscope series 6000 (for Mac or linux)" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Picoscope drivers</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/mojca/picoscope_drivers">View on GitHub</a>
+
+          <h1 id="project_title">Picoscope drivers</h1>
+          <h2 id="project_tagline">An initial attempt to reverse-engineer drivers for Picoscope series 6000 (for Mac or linux)</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/mojca/picoscope_drivers/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/mojca/picoscope_drivers/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h2>Reverse engineering PicoScope drivers to work on Mac &amp; Linux</h2>
+
+<p>PicoTech (<a href="http://www.picotech.com/">http://www.picotech.com/</a>) is refusing to release sources of their drivers for PicoScope. Not that I understand their policy: any competitor with a strong enough motivation will reverse-engineer them anyway, while they are driving a lot of people away from buying their otherwise excellent products. By open-sourcing or at least releasing specs of what is needed to get their device working, they would suddenly get a significant base of users who would be willing to provide code &amp; patches for free, port their drivers to Mac OS X and other flavours of unix ... all for free. And last, but not least ... they would be able to hire most motivated contributors to open source version of their drivers, getting qualified developers who already knew lots of ugly details about their products &amp; code. (They have been looking for developers ever since I follow their website.)</p>
+
+<p>Anyway ...</p>
+
+<p>We own one PicoScope from series 4000 which doesn't provide any Linux drivers at all, and one from series 6000 which does provide drivers for Linux, but for Ubuntu 11.04 32-bit only. I discovered multiple bugs while writing code to do data acquisition for my project. Half of the time the support at PicoTech was very helpful, but the other half of the time when drivers didn't work as they were supposed to (like: only being able to record 32k of traces when they claim to support 1M; having to fetch the whole 2GB of data in one step since fetching it stepwise will always start fetching at first sample, ...) I was left in dark. Moreover, I was disappointed for not having Mac drivers. I only have a mac computer, I do use VMWare to run windows though, and that kind-of-works.</p>
+
+<p><img src="http://www.picotech.com/showpic.php?pic=/ps6kban.jpg" alt="PicoScope Series 6000"></p>
+
+<p>Thanks to Aljaž (<a href="https://github.com/g5pw" class="user-mention">@g5pw</a>) for pointing it out to me that libusb could be used to run PicoScope on Mac as well. PicoTech ships a modified version of libusb. I figured out that I could recompile libusb_pico in debug mode, run a simple linux program and see what libusb_pico debug reports. In that way I might be able to reconstruct the whole sequence of libusb calls necessary to work with my PicoScope. In my earlier attempts I was trying to sniff USB traffic, but wasn't sure how exactly to do it, and I wasn't sure how to replicate the behaviour even if I would actually manage to understand the USB traffic. With libusb in debug mode in place ... it all sounds a lot easier, and would work both under Linux as well as under Mac OS X.</p>
+
+<p>These drivers are not usable for measurements yet, but as a proof of concept, I can already compile simple programs on Mac OS X which do talk to PicoScope (or at least open and close the device). There is still a very looooong way to go. If I ever get enough functionality to do basic data recording, my next goal is to write a Qt-based GUI which would also be cross-platform.</p>
+
+<p>I decided to report what exactly I'm doing. If there is any other enthusiast out there willing to help, please contact me, but the report might be helpful to others reverse-engineering USB drivers.</p>
+
+<h3>I'm a complete newbie</h3>
+
+<p>I know some basic programming techniques, but I'm in no way a hacker, I've never worked with any USB drivers, and would never even attempt writing a driver for such a complex device as a printer. The reason why I thought this particular project might be doable is because PicoScope allows calling one single command at a time, for example:</p>
+
+<div class="highlight">
+<pre><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+<span class="p">{</span>
+    <span class="kt">short</span> <span class="kt">int</span> <span class="n">status</span><span class="p">,</span> <span class="n">handle</span><span class="p">;</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">ps6000OpenUnit</span><span class="p">(</span><span class="o">&amp;</span><span class="n">handle</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+    <span class="c1">// in the meantime, check what is going on via USB traffic</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">ps6000CloseUnit</span><span class="p">(</span><span class="n">handle</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre>
+</div>
+
+
+<h3>Getting the sources</h3>
+
+<p>Linux drivers for PicoScope 6000 series can be fetched from <a href="http://www.picotech.com/linux.html">http://www.picotech.com/linux.html</a> (<a href="http://downloads.picotech.com/linux/32bit/ps6000_R1_0_0.tgz">http://downloads.picotech.com/linux/32bit/ps6000_R1_0_0.tgz</a> - when I last checked).</p>
+
+<p>Apart from instructions and sample code, two files are the most interesting ones:</p>
+
+<ul>
+<li>ps6000linux_1.0-1_i386.deb</li>
+<li>libusb_pico.tar.gz</li>
+</ul><p>The first one includes a package for Ubuntu 11.04 with all binaries &amp; headers already in place, while the second one contains sources of a modified version of libusb version 1.0.8 which PicoScope drivers are using to talk to the scope.</p>
+
+<h4>ps6000linux_1.0-1_i386.deb</h4>
+
+<p>The file can be extracted (also on Mac OS X) with</p>
+
+<pre><code>$ ar vx ps6000linux_1.0-1_i386.deb
+$ tar xvzf data.tar.gz 
+</code></pre>
+
+<p>and contains the following files:</p>
+
+<pre><code>/usr/
+/usr/lib/
+/usr/lib/libps6000.la
+/usr/lib/libps6000.so.1.0.0
+/usr/lib/libusb_pico-1.0.a
+/usr/lib/libusb_pico-1.0.la
+/usr/lib/libusb_pico-1.0.so.1.0.0
+/usr/lib/pkgconfig/
+/usr/lib/pkgconfig/libusb_pico-1.0.pc
+/usr/include/
+/usr/include/libps6000-1.3/
+/usr/include/libps6000-1.3/PicoStatus.h
+/usr/include/libps6000-1.3/ps6000Api.h
+/usr/include/libusb_pico-1.0/
+/usr/include/libusb_pico-1.0/libusb.h
+/usr/share/
+/usr/share/doc/
+/usr/share/doc/ps6000linux/
+/usr/share/doc/ps6000linux/copyright
+/usr/share/doc/ps6000linux/README.Debian
+/usr/share/doc/ps6000linux/changelog.Debian.gz
+/usr/lib/libusb_pico-1.0.so.1
+/usr/lib/libusb_pico-1.0.so
+/usr/lib/libps6000.so
+/usr/lib/libps6000.so.1
+</code></pre>
+
+<h4>libusb_pico</h4>
+
+<p>Let me say a few words about Pico's modifications of libusb first. Pico was kind enough to leave the relevant git shasum in the ChangeLog file which was the most important piece of information to find the corresponding original and review changes done by PicoTech (but they have removed a few other important files which make it possible to compile the library, and included doxygen settings which I didn't take a look into yet, but the file is usually autogenerated from sources).</p>
+
+<p>I fetched the libusb git repository with <code>git clone git://git.libusb.org/libusb.git</code> (as instructed on <a href="http://www.libusb.org/wiki/libusb-1.0">http://www.libusb.org/wiki/libusb-1.0</a>). I have put a mirror of that repository plus Pico's modifications and some modifications of my own on different branches of <a href="https://github.com/mojca/libusb_pico">https://github.com/mojca/libusb_pico</a>. The main reason why I did this is because I have found that a few trivial changes were needed to make it compile at all, and 1.0.8 doesn't compile on my Mac, probably because newer autotools have different requirements. On the other hand my 1.0.9 merge doesn't work as a drop-in replacement on Ubuntu.</p>
+
+<p>You can compile libusb_pico from (my) repository by running</p>
+
+<pre><code>$ ./autogen.sh
+$ ./configure --enable-debug-log
+$ make
+</code></pre>
+
+<p>You might need to install a few packages like autotools/autoconf/automake first if you didn't already.</p>
+
+<h3>Simple programs</h3>
+
+<p>Probably the most simple program with ps6000 support is the following:</p>
+
+<div class="highlight">
+<pre><span class="cp">#include &lt;libps6000-1.3/ps6000Api.h&gt;</span>
+<span class="cp">#include &lt;libps6000-1.3/PicoStatus.h&gt;</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+<span class="p">{</span>
+    <span class="kt">short</span> <span class="kt">int</span> <span class="n">status</span><span class="p">,</span> <span class="n">handle</span><span class="p">;</span>
+
+    <span class="n">status</span> <span class="o">=</span> <span class="n">ps6000OpenUnit</span><span class="p">(</span><span class="o">&amp;</span><span class="n">handle</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">ps6000CloseUnit</span><span class="p">(</span><span class="n">handle</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre>
+</div>
+
+
+<p>while a simple program that you can run on a Mac and doesn't require ps6000 drivers could look like the following:</p>
+
+<div class="highlight">
+<pre><span class="cp">#include &lt;stdio.h&gt;</span>
+<span class="cp">#include &lt;stdlib.h&gt;</span>
+<span class="cp">#include &lt;unistd.h&gt;</span>
+
+<span class="cp">#include &lt;libusb_pico-1.0/libusb.h&gt;</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+<span class="p">{</span>
+    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">err</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="n">libusb_device</span> <span class="o">**</span><span class="n">list</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="n">libusb_device</span> <span class="o">*</span><span class="n">therightdevice</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="n">libusb_device_descriptor</span> <span class="n">desc</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+    <span class="k">struct</span> <span class="n">libusb_device_handle</span> <span class="o">*</span><span class="n">handle</span><span class="p">;</span>
+
+    <span class="n">libusb_init</span><span class="p">(</span><span class="nb">NULL</span><span class="p">);</span>
+    <span class="kt">ssize_t</span> <span class="n">cnt</span> <span class="o">=</span> <span class="n">libusb_get_device_list</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">list</span><span class="p">);</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">cnt</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">libusb_get_device_descriptor</span><span class="p">(</span><span class="n">list</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">desc</span><span class="p">);</span>
+        <span class="c1">// this is the idVendor and idProduct of my PicoScope 6403;</span>
+        <span class="c1">// yours might be different</span>
+        <span class="k">if</span><span class="p">(</span><span class="n">desc</span><span class="o">-&gt;</span><span class="n">idVendor</span> <span class="o">==</span> <span class="mh">0x0ce9</span> <span class="o">&amp;&amp;</span> <span class="n">desc</span><span class="o">-&gt;</span><span class="n">idProduct</span> <span class="o">==</span> <span class="mh">0x100e</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">therightdevice</span> <span class="o">=</span> <span class="n">list</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">if</span><span class="p">(</span><span class="n">therightdevice</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">"You device wasn't found.</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">err</span> <span class="o">=</span> <span class="n">libusb_open</span><span class="p">(</span><span class="n">therightdevice</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">handle</span><span class="p">);</span>
+        <span class="n">libusb_close</span><span class="p">(</span><span class="n">handle</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="n">libusb_free_device_list</span><span class="p">(</span><span class="n">list</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+    <span class="n">libusb_release_interface</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre>
+</div>
+
+
+<h4>Compiling and running a program</h4>
+
+<p>On Linux one can compile a program with</p>
+
+<pre><code>$ gcc PS6000con.c -o PS6000con -lusb_pico-1.0 -lps6000 -I./include -L./lib -Wl,-rpath,$(pwd)/lib/
+</code></pre>
+
+<p>where you have to replace <code>./include</code> and <code>./lib</code> with the path where you keep libusb_pico headers and so files. The last argument enables running the binary without having libusb_pico library installed.</p>
+
+<p>On Mac OS X (where there are not ps6000 drivers availably yet anyway) you need:</p>
+
+<pre><code>$ gcc hello_world.c -o hello_world -lusb_pico-1.0 -I./include -L./lib
+</code></pre>
+
+<p>where you have to replace <code>./include</code> and <code>./lib</code> with the path where you keep libusb_pico headers and dylib files. On top of that I had to do</p>
+
+<pre><code>$ install_name_tool -change /usr/local/lib/libusb_pico-1.0.1.dylib $PWD/libusb_pico-1.0.1.dylib libusb_pico-1.0.1.dylib
+</code></pre>
+
+<p>on the dylib library if I wanted to avoid installing the library to /usr/local/lib and still making sure that the hello_world program would find it. (There is probably a flag in configure script to achieve the same.)</p>
+
+<p>The folder referred to as <code>include</code> has to contain</p>
+
+<pre><code>include/libps6000-1.3/PicoStatus.h
+include/libps6000-1.3/ps6000Api.h
+include/libusb_pico-1.0/libusb.h
+</code></pre>
+
+<p>The first two are optional on Mac OS X until you actually have some usable ps6000 code. The folder 'lib' could contain</p>
+
+<pre><code>lib/libps6000.la
+lib/libps6000.so -&gt; libps6000.so.1.0.0
+lib/libps6000.so.1 -&gt; libps6000.so.1.0.0
+lib/libps6000.so.1.0.0
+
+lib/libusb_pico-1.0.a
+lib/libusb_pico-1.0.la
+lib/libusb_pico-1.0.so -&gt; libusb_pico-1.0.so.1.0.0
+lib/libusb_pico-1.0.so.1 -&gt; libusb_pico-1.0.so.1.0.0
+lib/libusb_pico-1.0.so.1.0.0
+</code></pre>
+
+<p>on linux (you need to take libps6000 from the shipped package and might want to provide libusb_pico yourself, with debugging turned on). On Mac OS X you will probably start with</p>
+
+<pre><code>lib/libusb_pico-1.0.dylib
+</code></pre>
+
+<p>possibly pointing to libusb_pico-1.0.1.dylib.</p>
+
+<h2>Links</h2>
+
+<p><a href="http://www.linuxsa.org.au/meetings/reveng-0.2.pdf">http://www.linuxsa.org.au/meetings/reveng-0.2.pdf</a></p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Picoscope drivers maintained by <a href="https://github.com/mojca">mojca</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
